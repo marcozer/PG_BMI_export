@@ -1,4 +1,6 @@
-Export package for BMI × volume analyses
+Export package for BMI and center volume analyses for predicting Best Performers outcomes after Laparoscopic Distal Pancreatectomy. 
+
+The model were built by Alexandra Nassar, Clément Pastier, Sébastien Gaujoux and Marc-Anthony Chouillard for the [AFC](https://www.association-francaise-chirurgie.fr/) (French Association of Visceral Surgery). 
 
 Overview
 - This folder contains the cleaned, GitHub‑ready export of the project’s three analyses:
