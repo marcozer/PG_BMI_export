@@ -1,0 +1,12 @@
+term,vif
+asa_ge3[T.True],1.1595903075887841
+sex_male[T.True],1.0896811068742887
+malignant[T.True],1.2439623150240315
+robotic[T.True],1.0542102392894974
+splenectomy[T.True],1.1812434103032576
+"bs(bmi, df=4, include_intercept=False)[0]",9.451024955638259
+"bs(bmi, df=4, include_intercept=False)[1]",2.129518811913733
+"bs(bmi, df=4, include_intercept=False)[2]",8.423515789569798
+"bs(bmi, df=4, include_intercept=False)[3]",1.8919272637784663
+age,1.2224771816380071
+centre_volume,1.0895863405568342

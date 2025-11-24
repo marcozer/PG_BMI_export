@@ -1,0 +1,5 @@
+outcome,test,stat,df,p_value
+ideal_outcome,LRT spline_vs_linear,5.50522698756231,3,0.06376100427375388
+ideal_outcome,Wald BMI spline terms,11.675053322744994,4,0.019938542840101
+best_performer,LRT spline_vs_linear,2.348342806603796,3,0.309074972117495
+best_performer,Wald BMI spline terms,17.420341113218516,4,0.00160120836058013
