@@ -18,4 +18,11 @@ The model were built by Alexandra Nassar, Clément Pastier, Sébastien Gaujoux a
 - The primary inferential analysis is 02_interaction (linear BMI × volume with cluster‑robust SE). Curves are marginal means (g‑computation) with delta‑method 95% CIs.
 - Alternative visualisations are provided: combined panels, facets, point+whiskers at BMI 25/30/35/40, and OR(+5) bars per tier.
 
+## CLI flags (volume definition)
+- All `run.py` scripts support `--volume-tier-mode`:
+  - `tertiles` (default): Low/Mid/High defined by tertiles of total cases per centre in the dataset.
+  - `annual_threshold`: Low <5, Mid 5–10, High >10 pancreatectomies per year (per centre-year). This recomputes `centre_volume` and `centre_volume_cat` internally and propagates to all analyses and plots.
+- Examples:
+  - `python export/02_interaction/run.py --volume-tier-mode annual_threshold`
+  - `python export/01_bmi_risk/run.py --volume-tier-mode tertiles`
 

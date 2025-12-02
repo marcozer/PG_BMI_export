@@ -15,12 +15,14 @@ from statsmodels.stats.outliers_influence import variance_inflation_factor
 
 import sys
 sys.path.append(str(Path(__file__).resolve().parents[1]))
+sys.path.append(str(Path(__file__).resolve().parents[2] / "analysis"))
 from lib.dataset import build_dataset  # noqa: E402
+import argparse
 
 OUTCOMES = ["ideal_outcome", "best_performer", "major_clavien", "popf_bc", "conversion"]
 COVARIATES = ["age", "asa_ge3", "sex_male", "malignant", "robotic", "splenectomy", "centre_volume"]
 BMI_POINTS = [22, 27, 32, 37, 42]
-OUTPUT_DIR = Path("analysis/01_bmi_risk/outputs")
+OUTPUT_DIR = Path(__file__).resolve().parent / "outputs"
 
 
 def fit_models(df: pd.DataFrame, outcome: str) -> Dict[str, sm.GLM]:
@@ -156,9 +158,31 @@ def vif_table(model: sm.GLM) -> pd.DataFrame:
     return pd.DataFrame(vif_rows)
 
 
-def main() -> None:
+def apply_volume_mode(df: pd.DataFrame, mode: str = "tertiles") -> pd.DataFrame:
+    df = df.copy()
+    if mode == "annual_threshold":
+        if "year" not in df.columns and "ANNEE" in df.columns:
+            df["year"] = pd.to_numeric(df["ANNEE"], errors="coerce")
+        counts_cy = df.groupby(["CENTRE", "year"], observed=False)["CODE"].count().reset_index(name="vol_cy")
+        mean_per_centre = counts_cy.groupby("CENTRE", observed=False)["vol_cy"].mean().reset_index(name="vol_mean_per_year")
+        df = df.merge(mean_per_centre, on="CENTRE", how="left")
+        df["centre_volume"] = df["vol_mean_per_year"].astype(float)
+        bins = [-np.inf, 5, 10, np.inf]
+        labels = ["Low", "Mid", "High"]
+        df["centre_volume_cat"] = pd.cut(df["centre_volume"], bins=bins, labels=labels, right=True, include_lowest=True)
+    else:
+        df["centre_volume"] = df.groupby("CENTRE")["CODE"].transform("count")
+        try:
+            df["centre_volume_cat"] = pd.qcut(df["centre_volume"], q=[0, 0.33, 0.66, 1.0], labels=["Low", "Mid", "High"], duplicates="drop")
+        except Exception:
+            df["centre_volume_cat"] = pd.cut(df["centre_volume"], bins=3, labels=["Low", "Mid", "High"]) 
+    return df
+
+
+def main(volume_tier_mode: str = "tertiles") -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     df = build_dataset()
+    df = apply_volume_mode(df, mode=volume_tier_mode)
 
     compare_rows = []
     marginal_rows = []
@@ -192,4 +216,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="BMI intrinsic effect export")
+    parser.add_argument("--volume-tier-mode", choices=["tertiles", "annual_threshold"], default="tertiles", help="How to define volume tiers")
+    args = parser.parse_args()
+    main(volume_tier_mode=args.volume_tier_mode)

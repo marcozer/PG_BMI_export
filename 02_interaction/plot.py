@@ -12,10 +12,11 @@ import pandas as pd
 
 import sys
 sys.path.append(str(Path(__file__).resolve().parents[1]))
+sys.path.append(str(Path(__file__).resolve().parents[2] / "analysis"))
 from lib.plotting import NordWhiteTheme, apply_theme
 from lib.dataset import build_dataset
 
-OUTPUT_DIR = Path("analysis/02_interaction/outputs")
+OUTPUT_DIR = Path(__file__).resolve().parent / "outputs"
 PLOT_TIER = OUTPUT_DIR / "bmi_interaction_tiers.png"
 PLOT_TIER_SVG = OUTPUT_DIR / "bmi_interaction_tiers.svg"
 PLOT_TIER_ANN = OUTPUT_DIR / "bmi_interaction_tiers_annotated.png"

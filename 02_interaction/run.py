@@ -18,13 +18,16 @@ from statsmodels.genmod.generalized_estimating_equations import GEE
 from patsy import build_design_matrices
 
 import sys
+# Allow importing analysis/lib when running from export/
 sys.path.append(str(Path(__file__).resolve().parents[1]))
+sys.path.append(str(Path(__file__).resolve().parents[2] / "analysis"))
 from lib.dataset import build_dataset  # noqa: E402
 from lib.imputation import build_dataset_imputed  # noqa: E402
+import argparse
 
 OUTCOME = "best_performer"
 BASE_COVARS = ["age", "asa_ge3", "sex_male", "malignant", "robotic", "splenectomy"]
-OUTPUT_DIR = Path("analysis/02_interaction/outputs")
+OUTPUT_DIR = Path(__file__).resolve().parent / "outputs"
 
 VOLUME_LEVELS = [10, 30, 60, 100]
 BMI_LEVELS = [22, 27, 32, 37, 42]
@@ -47,6 +50,39 @@ def build_design(df: pd.DataFrame) -> tuple[pd.Series, pd.DataFrame, np.ndarray,
     aligned = df.loc[y.index]
     groups = aligned["CENTRE"].astype("category").cat.codes.to_numpy()
     return y, X, groups, aligned, X.design_info
+
+
+def apply_volume_mode(df: pd.DataFrame, mode: str = "tertiles") -> pd.DataFrame:
+    """Compute centre volume metric and tiers according to the requested mode.
+
+    - tertiles (default): total cases per centre across the whole dataset, tertile cut.
+    - annual_threshold: cases per centre per year; tiers by thresholds: Low <5, Mid 5–10, High >10.
+    Returns a modified copy of df with updated 'centre_volume' and 'centre_volume_cat'.
+    """
+    df = df.copy()
+    if mode == "annual_threshold":
+        # Mean annual volume per centre (average number of cases per centre per year)
+        if "year" not in df.columns and "ANNEE" in df.columns:
+            df["year"] = pd.to_numeric(df["ANNEE"], errors="coerce")
+        counts_cy = (
+            df.groupby(["CENTRE", "year"], observed=False)["CODE"].count().reset_index(name="vol_cy")
+        )
+        mean_per_centre = counts_cy.groupby("CENTRE", observed=False)["vol_cy"].mean().reset_index(name="vol_mean_per_year")
+        df = df.merge(mean_per_centre, on="CENTRE", how="left")
+        df["centre_volume"] = df["vol_mean_per_year"].astype(float)
+        # thresholds: Low <5, Mid 5–10 (inclusive upper), High >10
+        bins = [-np.inf, 5, 10, np.inf]
+        labels = ["Low", "Mid", "High"]
+        df["centre_volume_cat"] = pd.cut(df["centre_volume"], bins=bins, labels=labels, right=True, include_lowest=True)
+    else:
+        # Tertiles on total cases per centre (default behavior)
+        df["centre_volume"] = df.groupby("CENTRE")["CODE"].transform("count")
+        try:
+            df["centre_volume_cat"] = pd.qcut(df["centre_volume"], q=[0, 0.33, 0.66, 1.0], labels=["Low", "Mid", "High"], duplicates="drop")
+        except Exception:
+            # Fallback to equal-width if qcut fails
+            df["centre_volume_cat"] = pd.cut(df["centre_volume"], bins=3, labels=["Low", "Mid", "High"]) 
+    return df
 
 
 def build_design_spline(df: pd.DataFrame) -> tuple[pd.Series, pd.DataFrame, np.ndarray, pd.DataFrame, patsy.DesignInfo]:
@@ -294,8 +330,13 @@ def volume_threshold_tests(df: pd.DataFrame, groups: np.ndarray) -> pd.DataFrame
         y, X = patsy.dmatrices(formula, df_thr, return_type="dataframe")
         y = y.iloc[:, 0]
         groups_aligned = df_thr.loc[y.index, "CENTRE"].astype("category").cat.codes.to_numpy()
-        glm = sm.GLM(y, X, family=family).fit(cov_type="cluster", cov_kwds={"groups": groups_aligned})
-        p_int = glm.pvalues.get("bmi:highvol", np.nan)
+        try:
+            glm = sm.GLM(y, X, family=family).fit(cov_type="cluster", cov_kwds={"groups": groups_aligned})
+            p_int = glm.pvalues.get("bmi:highvol", np.nan)
+        except Exception:
+            # Fallback if robust covariance fails (e.g., singular matrix in small cells)
+            glm = sm.GLM(y, X, family=family).fit()
+            p_int = glm.pvalues.get("bmi:highvol", np.nan)
         rows.append({"threshold": thr, "p_interaction": float(p_int) if p_int is not None else np.nan})
     return pd.DataFrame(rows)
 
@@ -361,9 +402,12 @@ def curve_by_tier(glm: sm.GLM, df: pd.DataFrame, design_info: patsy.DesignInfo) 
     return pd.DataFrame(rows)
 
 
-def main(use_imputed: bool = False) -> None:
+def main(use_imputed: bool = False, volume_tier_mode: str = "tertiles") -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     df = build_dataset_imputed() if use_imputed else build_dataset()
+    df = apply_volume_mode(df, mode=volume_tier_mode)
+    # record mode used
+    (OUTPUT_DIR / "volume_mode.txt").write_text(volume_tier_mode)
     # Helper to run a full pipeline for a given design
     def run_pipeline(y, X, groups, aligned, design_info, suffix: str = "") -> None:
         glm, gee = fit_models(y, X, groups)
@@ -423,5 +467,8 @@ def main(use_imputed: bool = False) -> None:
 
 
 if __name__ == "__main__":
-    # To run with imputation: main(use_imputed=True)
-    main()
+    parser = argparse.ArgumentParser(description="BMI × Volume interaction export")
+    parser.add_argument("--use-imputed", action="store_true", help="Use MICE-imputed dataset")
+    parser.add_argument("--volume-tier-mode", choices=["tertiles", "annual_threshold"], default="tertiles", help="How to define volume tiers")
+    args = parser.parse_args()
+    main(use_imputed=args.use_imputed, volume_tier_mode=args.volume_tier_mode)

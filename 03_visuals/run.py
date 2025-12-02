@@ -13,7 +13,9 @@ import statsmodels.api as sm
 
 import sys
 sys.path.append(str(Path(__file__).resolve().parents[1]))
+sys.path.append(str(Path(__file__).resolve().parents[2] / "analysis"))
 from lib.dataset import build_dataset
+import argparse
 from lib.plotting import NordWhiteTheme, apply_theme
 
 COMPONENTS = [
@@ -23,7 +25,7 @@ COMPONENTS = [
     ("readmission", "Réadmission"),
     ("reoperation", "Réintervention"),
 ]
-OUTPUT_DIR = Path("analysis/03_visuals/outputs")
+OUTPUT_DIR = Path(__file__).resolve().parent / "outputs"
 PLOT_STACK = OUTPUT_DIR / "component_stack.png"
 PLOT_STACK_SVG = OUTPUT_DIR / "component_stack.svg"
 PLOT_VOL = OUTPUT_DIR / "popf_bmi_volume.png"
@@ -119,9 +121,31 @@ def rank_components(table: pd.DataFrame) -> pd.DataFrame:
     return wide
 
 
-def main() -> None:
+def apply_volume_mode(df: pd.DataFrame, mode: str = "tertiles") -> pd.DataFrame:
+    df = df.copy()
+    if mode == "annual_threshold":
+        if "year" not in df.columns and "ANNEE" in df.columns:
+            df["year"] = pd.to_numeric(df["ANNEE"], errors="coerce")
+        counts_cy = df.groupby(["CENTRE", "year"], observed=False)["CODE"].count().reset_index(name="vol_cy")
+        mean_per_centre = counts_cy.groupby("CENTRE", observed=False)["vol_cy"].mean().reset_index(name="vol_mean_per_year")
+        df = df.merge(mean_per_centre, on="CENTRE", how="left")
+        df["centre_volume"] = df["vol_mean_per_year"].astype(float)
+        bins = [-np.inf, 5, 10, np.inf]
+        labels = ["Low", "Mid", "High"]
+        df["centre_volume_cat"] = pd.cut(df["centre_volume"], bins=bins, labels=labels, right=True, include_lowest=True)
+    else:
+        df["centre_volume"] = df.groupby("CENTRE")["CODE"].transform("count")
+        try:
+            df["centre_volume_cat"] = pd.qcut(df["centre_volume"], q=[0, 0.33, 0.66, 1.0], labels=["Low", "Mid", "High"], duplicates="drop")
+        except Exception:
+            df["centre_volume_cat"] = pd.cut(df["centre_volume"], bins=3, labels=["Low", "Mid", "High"]) 
+    return df
+
+
+def main(volume_tier_mode: str = "tertiles") -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     df = build_dataset()
+    df = apply_volume_mode(df, mode=volume_tier_mode)
 
     table = component_table(df)
     table.to_csv(OUTPUT_DIR / "component_rates.csv", index=False)
@@ -141,4 +165,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Component breakdown export")
+    parser.add_argument("--volume-tier-mode", choices=["tertiles", "annual_threshold"], default="tertiles", help="How to define volume tiers")
+    args = parser.parse_args()
+    main(volume_tier_mode=args.volume_tier_mode)
