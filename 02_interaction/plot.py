@@ -15,6 +15,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 sys.path.append(str(Path(__file__).resolve().parents[2] / "analysis"))
 from lib.plotting import NordWhiteTheme, apply_theme
 from lib.dataset import build_dataset
+import numpy as np
 
 OUTPUT_DIR = Path(__file__).resolve().parent / "outputs"
 PLOT_TIER = OUTPUT_DIR / "bmi_interaction_tiers.png"
@@ -35,6 +36,46 @@ PLOT_ORBARS = OUTPUT_DIR / "or_per5_bars.png"
 PLOT_ORBARS_SVG = OUTPUT_DIR / "or_per5_bars.svg"
 PLOT_CALIB = OUTPUT_DIR / "calibration_tier.png"
 PLOT_CALIB_SVG = OUTPUT_DIR / "calibration_tier.svg"
+
+def _read_volume_mode(default: str = "tertiles") -> str:
+    """Read the volume tiering mode recorded during run.py execution."""
+    try:
+        txt = (OUTPUT_DIR / "volume_mode.txt").read_text().strip()
+        if txt in {"tertiles", "annual_threshold"}:
+            return txt
+    except Exception:
+        pass
+    return default
+
+def apply_volume_mode(df: pd.DataFrame, mode: str = "tertiles") -> pd.DataFrame:
+    """Compute centre volume metric and tiers according to the requested mode.
+
+    - tertiles (default): total cases per centre across the whole dataset, tertile cut.
+    - annual_threshold: mean annual cases per centre; Low <5, Mid 5–10, High >10.
+    Returns a modified copy of df with updated 'centre_volume' and 'centre_volume_cat'.
+    """
+    df = df.copy()
+    if mode == "annual_threshold":
+        if "year" not in df.columns and "ANNEE" in df.columns:
+            df["year"] = pd.to_numeric(df["ANNEE"], errors="coerce")
+        counts_cy = (
+            df.groupby(["CENTRE", "year"], observed=False)["CODE"].count().reset_index(name="vol_cy")
+        )
+        mean_per_centre = counts_cy.groupby("CENTRE", observed=False)["vol_cy"].mean().reset_index(name="vol_mean_per_year")
+        df = df.merge(mean_per_centre, on="CENTRE", how="left")
+        df["centre_volume"] = df["vol_mean_per_year"].astype(float)
+        bins = [-np.inf, 5, 10, np.inf]
+        labels = ["Low", "Mid", "High"]
+        df["centre_volume_cat"] = pd.cut(df["centre_volume"], bins=bins, labels=labels, right=True, include_lowest=True)
+    else:
+        df["centre_volume"] = df.groupby("CENTRE")["CODE"].transform("count")
+        try:
+            df["centre_volume_cat"] = pd.qcut(
+                df["centre_volume"], q=[0, 0.33, 0.66, 1.0], labels=["Low", "Mid", "High"], duplicates="drop"
+            )
+        except Exception:
+            df["centre_volume_cat"] = pd.cut(df["centre_volume"], bins=3, labels=["Low", "Mid", "High"]) 
+    return df
 
 
 def plot_tier_curves(curve_path: Path, pairwise_path: Path, interaction_p_path: Path) -> None:
@@ -197,10 +238,15 @@ def main() -> None:
             color = palette[idx % len(palette)]
             ax.plot(grp["bmi"], grp["prob"], color=color, linewidth=2.3, label=tier)
             ax.fill_between(grp["bmi"], grp["ci_low"], grp["ci_high"], color=color, alpha=0.15)
-        # Rug: show BMI distribution by tier under axis
+        # Rug: show BMI distribution by tier under axis, computed with SAME volume mode as curves
         trans = transforms.blended_transform_factory(ax.transData, ax.transAxes)
         rug_levels = {"Low": -0.12, "Mid": -0.10, "High": -0.08}
-        df = build_dataset().dropna(subset=["bmi", "centre_volume_cat"])  # raw BMI for rug only
+        vm = _read_volume_mode(default="tertiles")
+        df = build_dataset()
+        df = apply_volume_mode(df, mode=vm)
+        # Optionally restrict to complete cases used by the model to avoid misleading rugs
+        needed = ["bmi", "centre_volume_cat"]
+        df = df.dropna(subset=needed)
         for idx, tier in enumerate(["Low", "Mid", "High"]):
             t = df[df["centre_volume_cat"] == tier]
             if t.empty:
