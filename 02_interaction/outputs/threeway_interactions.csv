@@ -1,3 +1,3 @@
 interaction,p_value
-bmi*volume*malignant,0.3836245011164512
-bmi*volume*robotic,0.7071628122941136
+bmi*volume*malignant,0.2241172122880598
+bmi*volume*robotic,0.5488753282030105

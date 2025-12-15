@@ -57,21 +57,34 @@ def apply_volume_mode(df: pd.DataFrame, mode: str = "tertiles") -> pd.DataFrame:
 
     - tertiles (default): total cases per centre across the whole dataset, tertile cut.
     - annual_threshold: cases per centre per year; tiers by thresholds: Low <5, Mid 5–10, High >10.
+    - mipd_annual_threshold: mean annual minimally invasive pancreatectomies; tiers: Low <10, Mid 10–20, High >20 per year.
     Returns a modified copy of df with updated 'centre_volume' and 'centre_volume_cat'.
     """
     df = df.copy()
-    if mode == "annual_threshold":
-        # Mean annual volume per centre (average number of cases per centre per year)
+    if mode in {"annual_threshold", "mipd_annual_threshold"}:
         if "year" not in df.columns and "ANNEE" in df.columns:
             df["year"] = pd.to_numeric(df["ANNEE"], errors="coerce")
-        counts_cy = (
-            df.groupby(["CENTRE", "year"], observed=False)["CODE"].count().reset_index(name="vol_cy")
-        )
-        mean_per_centre = counts_cy.groupby("CENTRE", observed=False)["vol_cy"].mean().reset_index(name="vol_mean_per_year")
-        df = df.merge(mean_per_centre, on="CENTRE", how="left")
-        df["centre_volume"] = df["vol_mean_per_year"].astype(float)
-        # thresholds: Low <5, Mid 5–10 (inclusive upper), High >10
-        bins = [-np.inf, 5, 10, np.inf]
+        if mode == "annual_threshold":
+            counts_cy = (
+                df.groupby(["CENTRE", "year"], observed=False)["CODE"].count().reset_index(name="vol_cy")
+            )
+            mean_per_centre = counts_cy.groupby("CENTRE", observed=False)["vol_cy"].mean().reset_index(name="vol_mean_per_year")
+            df = df.merge(mean_per_centre, on="CENTRE", how="left")
+            df["centre_volume"] = df["vol_mean_per_year"].astype(float)
+            bins = [-np.inf, 5, 10, np.inf]
+        else:  # mipd_annual_threshold
+            df["NOMBRE_MIPD"] = pd.to_numeric(df.get("NOMBRE_MIPD"), errors="coerce")
+            mipd_total = (
+                df.groupby("CENTRE", observed=False)["NOMBRE_MIPD"]
+                .agg(lambda s: s.dropna().iloc[0] if not s.dropna().empty else np.nan)
+                .reset_index(name="mipd_total")
+            )
+            years_per_centre = df.groupby("CENTRE", observed=False)["year"].nunique().reset_index(name="n_years")
+            mean_per_centre = mipd_total.merge(years_per_centre, on="CENTRE", how="left")
+            mean_per_centre["mipd_mean_per_year"] = mean_per_centre["mipd_total"] / mean_per_centre["n_years"]
+            df = df.merge(mean_per_centre[["CENTRE", "mipd_mean_per_year"]], on="CENTRE", how="left")
+            df["centre_volume"] = df["mipd_mean_per_year"].astype(float)
+            bins = [-np.inf, 10, 20, np.inf]
         labels = ["Low", "Mid", "High"]
         df["centre_volume_cat"] = pd.cut(df["centre_volume"], bins=bins, labels=labels, right=True, include_lowest=True)
     else:
@@ -469,6 +482,6 @@ def main(use_imputed: bool = False, volume_tier_mode: str = "tertiles") -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="BMI × Volume interaction export")
     parser.add_argument("--use-imputed", action="store_true", help="Use MICE-imputed dataset")
-    parser.add_argument("--volume-tier-mode", choices=["tertiles", "annual_threshold"], default="tertiles", help="How to define volume tiers")
+    parser.add_argument("--volume-tier-mode", choices=["tertiles", "annual_threshold", "mipd_annual_threshold"], default="tertiles", help="How to define volume tiers")
     args = parser.parse_args()
     main(use_imputed=args.use_imputed, volume_tier_mode=args.volume_tier_mode)

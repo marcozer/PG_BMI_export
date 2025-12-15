@@ -1,12 +1,12 @@
 term,vif
-asa_ge3[T.True],1.158035790884376
-sex_male[T.True],1.0896749822796898
-malignant[T.True],1.2435664375147748
-robotic[T.True],1.0497816818840828
-splenectomy[T.True],1.1759410951533207
-"bs(bmi, df=4, include_intercept=False)[0]",9.44883260650805
-"bs(bmi, df=4, include_intercept=False)[1]",2.129638340949546
-"bs(bmi, df=4, include_intercept=False)[2]",8.423163275223471
-"bs(bmi, df=4, include_intercept=False)[3]",1.8919275163651232
-age,1.2223369420694017
-centre_volume,1.0766973417620693
+asa_ge3[T.True],1.1523838762181944
+sex_male[T.True],1.089721011799872
+malignant[T.True],1.2435433432606433
+robotic[T.True],1.035904195950018
+splenectomy[T.True],1.1734176450355425
+"bs(bmi, df=4, include_intercept=False)[0]",9.449432113915043
+"bs(bmi, df=4, include_intercept=False)[1]",2.1303785846434136
+"bs(bmi, df=4, include_intercept=False)[2]",8.42295350019026
+"bs(bmi, df=4, include_intercept=False)[3]",1.8920182737526186
+age,1.2217886100249784
+centre_volume,1.0496958567671533

@@ -35,14 +35,28 @@ POOLED_ANN_SVG = OUTPUT_DIR / "bmi_bp_volume_pooled_annotated.svg"
 
 def apply_volume_mode(df: pd.DataFrame, mode: str = "tertiles") -> pd.DataFrame:
     df = df.copy()
-    if mode == "annual_threshold":
+    if mode in {"annual_threshold", "mipd_annual_threshold"}:
         if "year" not in df.columns and "ANNEE" in df.columns:
             df["year"] = pd.to_numeric(df["ANNEE"], errors="coerce")
-        counts_cy = df.groupby(["CENTRE", "year"], observed=False)["CODE"].count().reset_index(name="vol_cy")
-        mean_per_centre = counts_cy.groupby("CENTRE", observed=False)["vol_cy"].mean().reset_index(name="vol_mean_per_year")
-        df = df.merge(mean_per_centre, on="CENTRE", how="left")
-        df["centre_volume"] = df["vol_mean_per_year"].astype(float)
-        bins = [-np.inf, 5, 10, np.inf]
+        if mode == "annual_threshold":
+            counts_cy = df.groupby(["CENTRE", "year"], observed=False)["CODE"].count().reset_index(name="vol_cy")
+            mean_per_centre = counts_cy.groupby("CENTRE", observed=False)["vol_cy"].mean().reset_index(name="vol_mean_per_year")
+            df = df.merge(mean_per_centre, on="CENTRE", how="left")
+            df["centre_volume"] = df["vol_mean_per_year"].astype(float)
+            bins = [-np.inf, 5, 10, np.inf]
+        else:  # mipd_annual_threshold = total MIPD / number of years observed
+            df["NOMBRE_MIPD"] = pd.to_numeric(df.get("NOMBRE_MIPD"), errors="coerce")
+            mipd_total = (
+                df.groupby("CENTRE", observed=False)["NOMBRE_MIPD"]
+                .agg(lambda s: s.dropna().iloc[0] if not s.dropna().empty else np.nan)
+                .reset_index(name="mipd_total")
+            )
+            years_per_centre = df.groupby("CENTRE", observed=False)["year"].nunique().reset_index(name="n_years")
+            mean_per_centre = mipd_total.merge(years_per_centre, on="CENTRE", how="left")
+            mean_per_centre["mipd_mean_per_year"] = mean_per_centre["mipd_total"] / mean_per_centre["n_years"]
+            df = df.merge(mean_per_centre[["CENTRE", "mipd_mean_per_year"]], on="CENTRE", how="left")
+            df["centre_volume"] = df["mipd_mean_per_year"].astype(float)
+            bins = [-np.inf, 10, 20, np.inf]
         labels = ["Low", "Mid", "High"]
         df["centre_volume_cat"] = pd.cut(df["centre_volume"], bins=bins, labels=labels, right=True, include_lowest=True)
     else:
@@ -272,6 +286,6 @@ def main(volume_tier_mode: str = "tertiles") -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="BMI dose-response + pooled volume plots")
-    parser.add_argument("--volume-tier-mode", choices=["tertiles", "annual_threshold"], default="tertiles")
+    parser.add_argument("--volume-tier-mode", choices=["tertiles", "annual_threshold", "mipd_annual_threshold"], default="tertiles")
     args = parser.parse_args()
     main(volume_tier_mode=args.volume_tier_mode)
