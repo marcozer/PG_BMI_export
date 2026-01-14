@@ -28,22 +28,24 @@ COMPONENTS = [
 OUTPUT_DIR = Path(__file__).resolve().parent / "outputs"
 PLOT_STACK = OUTPUT_DIR / "component_stack.png"
 PLOT_STACK_SVG = OUTPUT_DIR / "component_stack.svg"
+PLOT_STACK_EXT = OUTPUT_DIR / "component_stack_ext.png"
+PLOT_STACK_EXT_SVG = OUTPUT_DIR / "component_stack_ext.svg"
 PLOT_VOL = OUTPUT_DIR / "popf_bmi_volume.png"
 PLOT_VOL_SVG = OUTPUT_DIR / "popf_bmi_volume.svg"
 
 
-def component_table(df: pd.DataFrame) -> pd.DataFrame:
-    counts = df.groupby("bmi_class", observed=False)["CODE"].count().rename("n")
-    rates = df.groupby("bmi_class", observed=False)[[c for c, _ in COMPONENTS]].mean()
+def component_table(df: pd.DataFrame, class_col: str = "bmi_class") -> pd.DataFrame:
+    counts = df.groupby(class_col, observed=False)["CODE"].count().rename("n")
+    rates = df.groupby(class_col, observed=False)[[c for c, _ in COMPONENTS]].mean()
     table = pd.concat([counts, rates], axis=1).reset_index()
-    table.columns = ["bmi_class", "n"] + [label for _, label in COMPONENTS]
+    table.columns = [class_col, "n"] + [label for _, label in COMPONENTS]
     return table
 
 
-def chi_square_bmi(df: pd.DataFrame) -> pd.DataFrame:
+def chi_square_bmi(df: pd.DataFrame, class_col: str = "bmi_class") -> pd.DataFrame:
     results = []
     for comp, label in COMPONENTS:
-        cross = pd.crosstab(df["bmi_class"], df[comp])
+        cross = pd.crosstab(df[class_col], df[comp])
         res = sm.stats.Table(cross).test_nominal_association()
         results.append({"component": label, "chi2": float(res.statistic), "p_value": float(res.pvalue)})
     return pd.DataFrame(results)
@@ -70,26 +72,26 @@ def popf_bmi_volume(df: pd.DataFrame) -> pd.DataFrame:
     })
 
 
-def stack_plot(table: pd.DataFrame) -> None:
+def stack_plot(table: pd.DataFrame, *, class_col: str = "bmi_class", out_png: Path = PLOT_STACK, out_svg: Path = PLOT_STACK_SVG, xlabel: str = "BMI (classes OMS)") -> None:
     theme = NordWhiteTheme()
     fig, ax = plt.subplots(figsize=(7, 4), dpi=150)
     bottom = np.zeros(len(table))
     palette = list(theme.palette) + [theme.axis]
     for idx, label in enumerate(table.columns[2:]):
         color = palette[idx % len(palette)]
-        ax.bar(table["bmi_class"], table[label], bottom=bottom, color=color, label=label)
+        ax.bar(table[class_col], table[label], bottom=bottom, color=color, label=label)
         bottom = bottom + table[label]
     for i, n in enumerate(table["n"]):
         ax.text(i, 1.02, f"n={int(n)}", ha="center", color=theme.axis, fontsize=9)
-    ax.set_xlabel("BMI (classes OMS)")
+    ax.set_xlabel(xlabel)
     ax.set_ylabel("Taux de complication")
     ax.set_ylim(0, 1.1)
     ax.set_title("Composantes empêchant l'Ideal Outcome", color=theme.title)
     ax.legend(frameon=False, loc="upper left")
     apply_theme(ax, theme)
     fig.tight_layout()
-    fig.savefig(PLOT_STACK, dpi=150, facecolor=theme.background)
-    fig.savefig(PLOT_STACK_SVG, dpi=150, facecolor=theme.background)
+    fig.savefig(out_png, dpi=150, facecolor=theme.background)
+    fig.savefig(out_svg, dpi=150, facecolor=theme.background)
     plt.close(fig)
 
 
@@ -164,12 +166,19 @@ def main(volume_tier_mode: str = "tertiles") -> None:
     # record mode used
     (OUTPUT_DIR / "volume_mode.txt").write_text(volume_tier_mode)
 
-    table = component_table(df)
+    table = component_table(df, class_col="bmi_class")
     table.to_csv(OUTPUT_DIR / "component_rates.csv", index=False)
-    stack_plot(table)
+    stack_plot(table, class_col="bmi_class", out_png=PLOT_STACK, out_svg=PLOT_STACK_SVG, xlabel="BMI (classes OMS)")
 
-    chi = chi_square_bmi(df)
+    # Extended BMI classes to isolate BMI <20 and <18.5
+    table_ext = component_table(df, class_col="bmi_class_ext")
+    table_ext.to_csv(OUTPUT_DIR / "component_rates_ext.csv", index=False)
+    stack_plot(table_ext, class_col="bmi_class_ext", out_png=PLOT_STACK_EXT, out_svg=PLOT_STACK_EXT_SVG, xlabel="BMI (classes, seuil 20)")
+
+    chi = chi_square_bmi(df, class_col="bmi_class")
     chi.to_csv(OUTPUT_DIR / "component_chi_square.csv", index=False)
+    chi_ext = chi_square_bmi(df, class_col="bmi_class_ext")
+    chi_ext.to_csv(OUTPUT_DIR / "component_chi_square_ext.csv", index=False)
 
     popf = popf_bmi_volume(df)
     popf.to_csv(OUTPUT_DIR / "popf_bmi_volume_tests.csv", index=False)

@@ -33,7 +33,23 @@ VOLUME_LEVELS = [10, 30, 60, 100]
 BMI_LEVELS = [22, 27, 32, 37, 42]
 VOLUME_THRESHOLDS = [20, 50, 75]
 PAIRWISE_BMIS = [30, 35, 40]
-BMI_GRID = np.linspace(18, 45, 200)
+BMI_MIN_PLOT = 15
+BMI_MAX_PLOT = 45
+BMI_GRID = np.linspace(BMI_MIN_PLOT, BMI_MAX_PLOT, 200)
+UNDERWEIGHT_CUTOFFS = [18.5, 20.0]
+
+
+def _bmi_grid_within_data(df: pd.DataFrame, n: int = 200) -> np.ndarray:
+    """Return a BMI grid restricted to the observed range.
+
+    This avoids patsy spline basis errors when predictions are requested outside
+    the boundary knots (e.g., bs(bmi, ...)).
+    """
+    bmi_min = float(np.nanmin(df["bmi"].to_numpy()))
+    bmi_max = float(np.nanmax(df["bmi"].to_numpy()))
+    start = max(BMI_MIN_PLOT, bmi_min)
+    stop = min(BMI_MAX_PLOT, bmi_max)
+    return np.linspace(start, stop, n)
 
 
 def build_design(df: pd.DataFrame) -> tuple[pd.Series, pd.DataFrame, np.ndarray, pd.DataFrame, patsy.DesignInfo]:
@@ -233,7 +249,7 @@ def difference_curve(glm: sm.GLM, df: pd.DataFrame, design_info: patsy.DesignInf
     vol_low = float(tiers.get("Low", np.nan))
     vol_mid = float(tiers.get("Mid", np.nan))
     vol_high = float(tiers.get("High", np.nan))
-    for bmi_val in BMI_GRID:
+    for bmi_val in _bmi_grid_within_data(df, n=len(BMI_GRID)):
         # High vs Low
         p_h, g_h = mean_pred_and_grad(bmi_val, vol_high)
         p_l, g_l = mean_pred_and_grad(bmi_val, vol_low)
@@ -386,13 +402,12 @@ def curve_by_tier(glm: sm.GLM, df: pd.DataFrame, design_info: patsy.DesignInfo) 
     with the cluster-robust covariance of the GLM to derive CIs.
     """
     tiers = df.dropna(subset=["centre_volume_cat"]).groupby("centre_volume_cat")["centre_volume"].median()
-    bmi_grid = np.linspace(18, 45, 200)
     cov = glm.cov_params()
     rows = []
     base_cov = df[BASE_COVARS].copy()
     for tier, vol_med in tiers.items():
         vol_scaled = vol_med / 10.0
-        for bmi_val in bmi_grid:
+        for bmi_val in _bmi_grid_within_data(df, n=len(BMI_GRID)):
             tmp = base_cov.copy()
             tmp["bmi"] = bmi_val
             tmp["centre_volume_scaled"] = vol_scaled
@@ -408,6 +423,53 @@ def curve_by_tier(glm: sm.GLM, df: pd.DataFrame, design_info: patsy.DesignInfo) 
             rows.append({
                 "tier": tier,
                 "bmi": bmi_val,
+                "prob": mean_p,
+                "ci_low": mean_p - 1.96 * se,
+                "ci_high": mean_p + 1.96 * se,
+            })
+    return pd.DataFrame(rows)
+
+def underweight_observed_by_tier(df: pd.DataFrame) -> pd.DataFrame:
+    """Observed BP rates for underweight cutoffs by volume tier (BMI<18.5 and BMI<20)."""
+    df_use = df.dropna(subset=[OUTCOME, "bmi", "centre_volume_cat"]).copy()
+    df_use[OUTCOME] = df_use[OUTCOME].astype(int)
+    rows = []
+    for cutoff in UNDERWEIGHT_CUTOFFS:
+        sub = df_use[df_use["bmi"] < cutoff]
+        for tier, grp in sub.groupby("centre_volume_cat", observed=False):
+            rows.append({
+                "cutoff": cutoff,
+                "tier": str(tier),
+                "n": int(grp.shape[0]),
+                "bp_rate": float(grp[OUTCOME].mean()) if grp.shape[0] else np.nan,
+            })
+    return pd.DataFrame(rows)
+
+
+def underweight_adjusted_points(glm: sm.GLM, df: pd.DataFrame, design_info: patsy.DesignInfo) -> pd.DataFrame:
+    """Marginal standardized probabilities at BMI=18.5 and 20 with delta-method CIs."""
+    tiers = df.dropna(subset=["centre_volume_cat"]).groupby("centre_volume_cat")["centre_volume"].median()
+    cov = glm.cov_params()
+    rows = []
+    base_cov = df[BASE_COVARS].copy()
+    for tier, vol_med in tiers.items():
+        vol_scaled = vol_med / 10.0
+        for bmi_val in UNDERWEIGHT_CUTOFFS:
+            tmp = base_cov.copy()
+            tmp["bmi"] = bmi_val
+            tmp["centre_volume_scaled"] = vol_scaled
+            tmp["bmi:centre_volume_scaled"] = bmi_val * vol_scaled
+            exog = np.asarray(patsy.build_design_matrices([design_info], tmp)[0])
+            lin = exog @ glm.params.to_numpy()
+            p = 1.0 / (1.0 + np.exp(-lin))
+            mean_p = float(p.mean())
+            w = (p * (1 - p))[:, None]
+            g = (w * exog).mean(axis=0)
+            var = float(g @ cov @ g)
+            se = np.sqrt(max(var, 0))
+            rows.append({
+                "tier": str(tier),
+                "bmi": float(bmi_val),
                 "prob": mean_p,
                 "ci_low": mean_p - 1.96 * se,
                 "ci_high": mean_p + 1.96 * se,
@@ -447,6 +509,11 @@ def main(use_imputed: bool = False, volume_tier_mode: str = "tertiles") -> None:
         # Calibration per tier
         calib = calibration_by_tier(glm, aligned, design_info)
         calib.to_csv(OUTPUT_DIR / f"calibration_tier{suffix}.csv", index=False)
+        # Underweight summaries (requested)
+        obs_uw = underweight_observed_by_tier(aligned)
+        obs_uw.to_csv(OUTPUT_DIR / f"underweight_observed_by_tier{suffix}.csv", index=False)
+        adj_uw = underweight_adjusted_points(glm, aligned, design_info)
+        adj_uw.to_csv(OUTPUT_DIR / f"underweight_adjusted_points{suffix}.csv", index=False)
         # p‑value interaction
         # Note: in spline design, the interaction is a block; we report the p‑value of the BMI×volume joint test via LRT is not here; keep GEE coef p if present.
         p_key = "bmi:centre_volume_scaled"

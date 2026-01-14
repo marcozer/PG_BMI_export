@@ -22,6 +22,9 @@ import argparse
 OUTCOMES = ["ideal_outcome", "best_performer", "major_clavien", "popf_bc", "conversion"]
 COVARIATES = ["age", "asa_ge3", "sex_male", "malignant", "robotic", "splenectomy", "centre_volume"]
 BMI_POINTS = [22, 27, 32, 37, 42]
+OR_TARGETS_VS25 = [18.5, 20, 30, 35, 40]
+BMI_MIN_PLOT = 15
+BMI_MAX_PLOT = 45
 OUTPUT_DIR = Path(__file__).resolve().parent / "outputs"
 
 
@@ -115,7 +118,13 @@ def or_vs_ref(model: sm.GLM, ref: float, targets: List[float], df: pd.DataFrame,
 
 def bp_curve_with_ci(model: sm.GLM, df: pd.DataFrame) -> pd.DataFrame:
     base = df[COVARIATES + ["bmi"]].dropna().median().to_dict()
-    bmi_grid = np.linspace(18, 45, 200)
+    # Keep the prediction grid within the observed BMI range to avoid spline
+    # extrapolation errors (patsy bs() does not support values outside knots).
+    bmi_min = float(np.nanmin(df["bmi"].to_numpy()))
+    bmi_max = float(np.nanmax(df["bmi"].to_numpy()))
+    start = max(BMI_MIN_PLOT, bmi_min)
+    stop = min(BMI_MAX_PLOT, bmi_max)
+    bmi_grid = np.linspace(start, stop, 200)
     rows = []
     for bmi_val in bmi_grid:
         row = base.copy()
@@ -218,7 +227,7 @@ def main(volume_tier_mode: str = "tertiles") -> None:
         param_table["outcome"] = outcome
         param_tables.append(param_table)
         if outcome == "best_performer":
-            or_rows.append(or_vs_ref(models["spline"], ref=25, targets=[30, 35, 40], df=df, outcome=outcome))
+            or_rows.append(or_vs_ref(models["spline"], ref=25, targets=OR_TARGETS_VS25, df=df, outcome=outcome))
             curve = bp_curve_with_ci(models["spline"], df)
             curve.to_csv(OUTPUT_DIR / "bmi_bp_curve.csv", index=False)
             calib, diag = bp_diagnostics(models["spline"], df)
@@ -226,8 +235,19 @@ def main(volume_tier_mode: str = "tertiles") -> None:
             diag.to_csv(OUTPUT_DIR / "bmi_bp_diagnostics.csv", index=False)
             vif = vif_table(models["spline"])
             vif.to_csv(OUTPUT_DIR / "bmi_bp_vif.csv", index=False)
+            # Underweight subgroup descriptives (requested: BMI<20 and BMI<18.5)
+            df_bp = df.dropna(subset=["best_performer", "bmi"]).copy()
+            df_bp["best_performer"] = df_bp["best_performer"].astype(int)
+            rows = []
+            for label, mask in [
+                ("BMI <18.5", df_bp["bmi"] < 18.5),
+                ("BMI <20", df_bp["bmi"] < 20),
+            ]:
+                sub = df_bp.loc[mask]
+                rows.append({"group": label, "n": int(sub.shape[0]), "bp_rate": float(sub["best_performer"].mean()) if sub.shape[0] else np.nan})
+            pd.DataFrame(rows).to_csv(OUTPUT_DIR / "bmi_bp_underweight_groups.csv", index=False)
         else:
-            or_rows.append(or_vs_ref(models["spline"], ref=25, targets=[30, 35, 40], df=df, outcome=outcome))
+            or_rows.append(or_vs_ref(models["spline"], ref=25, targets=OR_TARGETS_VS25, df=df, outcome=outcome))
 
     pd.concat(compare_rows).to_csv(OUTPUT_DIR / "bmi_model_compare.csv", index=False)
     pd.concat(marginal_rows).to_csv(OUTPUT_DIR / "bmi_risk_predictions.csv", index=False)

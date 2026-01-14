@@ -124,7 +124,7 @@ def plot_tier_curves(curve_path: Path, pairwise_path: Path, interaction_p_path: 
     ax.set_xlabel("BMI (kg/m²)")
     ax.set_ylabel("Probabilité de Best Performer")
     ax.set_title("Interaction BMI × volume : tiers de centre", color=theme.title)
-    ax.set_xlim(18, 45)
+    ax.set_xlim(15, 45)
     ax.set_ylim(0, 0.5)
     ax.legend(frameon=False, title="Volume", loc="lower left")
     note = []
@@ -175,7 +175,7 @@ def plot_diff_curve(diff_path: Path, interaction_p_path: Path) -> None:
     ax.set_xlabel("BMI (kg/m²)")
     ax.set_ylabel("Δ Probabilité (High − autre)")
     ax.set_title("Interaction BMI×volume – différence de probabilité", color=theme.title)
-    ax.set_xlim(18, 45)
+    ax.set_xlim(15, 45)
     ax.set_ylim(-0.2, 0.2)
     ax.legend(frameon=False, title="Comparaison")
     if pint is not None and pd.notna(pint):
@@ -270,7 +270,7 @@ def main() -> None:
         ax.set_xlabel("BMI (kg/m²)")
         ax.set_ylabel("Probabilité de Best Performer")
         ax.set_title("BMI × volume: centres experts atténuent la pénalité", color=theme.title)
-        ax.set_xlim(18, 45)
+        ax.set_xlim(15, 45)
         ax.set_ylim(0, 0.5)
         ax.legend(frameon=False, title="Volume", loc="lower left")
         note = ["Courbes = prédictions GLM (IC 95%), SE cluster centre"]
@@ -313,7 +313,7 @@ def main() -> None:
             color = palette[idx % len(palette)]
             ax1.plot(grp["bmi"], grp["prob"], color=color, label=tier)
             ax1.fill_between(grp["bmi"], grp["ci_low"], grp["ci_high"], color=color, alpha=0.15)
-        ax1.set_xlabel("BMI (kg/m²)"); ax1.set_ylabel("Probabilité BP"); ax1.set_xlim(18, 45); ax1.set_ylim(0, 0.5)
+        ax1.set_xlabel("BMI (kg/m²)"); ax1.set_ylabel("Probabilité BP"); ax1.set_xlim(15, 45); ax1.set_ylim(0, 0.5)
         ax1.set_title("A. Courbes ajustées", color=theme.title)
         ax1.legend(frameon=False, title="Volume", loc="lower left")
         apply_theme(ax1, theme)
@@ -325,7 +325,7 @@ def main() -> None:
             ax2.plot(grp["bmi"], grp["diff"], color=color, label=comp)
             ax2.fill_between(grp["bmi"], grp["ci_low"], grp["ci_high"], color=color, alpha=0.15)
         ax2.axhline(0, color=theme.grid, linewidth=1)
-        ax2.set_xlabel("BMI (kg/m²)"); ax2.set_ylabel("Δ Prob (High−autre)"); ax2.set_xlim(18, 45); ax2.set_ylim(-0.2, 0.2)
+        ax2.set_xlabel("BMI (kg/m²)"); ax2.set_ylabel("Δ Prob (High−autre)"); ax2.set_xlim(15, 45); ax2.set_ylim(-0.2, 0.2)
         ax2.set_title("B. Différence ajustée", color=theme.title)
         ax2.legend(frameon=False, loc="lower left")
         apply_theme(ax2, theme)
@@ -348,7 +348,7 @@ def main() -> None:
             ax.plot(grp["bmi"], grp["prob"], color=color)
             ax.fill_between(grp["bmi"], grp["ci_low"], grp["ci_high"], color=color, alpha=0.15)
             ax.set_title(tier, color=theme.title)
-            ax.set_xlim(18, 45); ax.set_ylim(0, 0.5)
+            ax.set_xlim(15, 45); ax.set_ylim(0, 0.5)
             ax.set_xlabel("BMI (kg/m²)")
             if tier == "Low":
                 ax.set_ylabel("Probabilité BP")

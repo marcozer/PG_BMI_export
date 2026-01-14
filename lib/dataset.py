@@ -14,7 +14,8 @@ import pandas as pd
 
 from .data_loader import load_excel_sheet
 
-DEFAULT_CSV = Path("data/raw/pg_afc_sheet1.csv")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_CSV = REPO_ROOT / "data/raw/pg_afc_sheet1.csv"
 LOS_75TH_THRESHOLD = 13  # per manuscript
 LOS_25TH_THRESHOLD = 7
 
@@ -41,12 +42,12 @@ def _coerce_numeric(df: pd.DataFrame, mapping: Dict[str, str]) -> pd.DataFrame:
 
 
 def load_raw(path: str | Path | None = None) -> pd.DataFrame:
-    path_obj = Path(path or DEFAULT_CSV)
+    path_obj = Path(path) if path is not None else DEFAULT_CSV
     if path_obj.suffix.lower() == ".csv" and path_obj.exists():
         return pd.read_csv(path_obj)
     if path_obj.suffix.lower() == ".xlsx" and path_obj.exists():
         return load_excel_sheet(str(path_obj), sheet_index=1)
-    legacy_csv = Path("data/pg_afc_sheet1.csv")
+    legacy_csv = REPO_ROOT / "data/pg_afc_sheet1.csv"
     if DEFAULT_CSV.exists():
         return pd.read_csv(DEFAULT_CSV)
     if legacy_csv.exists():
@@ -106,8 +107,14 @@ def build_dataset(path: str | Path | None = None) -> pd.DataFrame:
     bmi_labels = ["<18.5", "18.5-24.9", "25-29.9", "30-34.9", "35-39.9", "≥40"]
     df["bmi_class"] = pd.cut(df["bmi"], bins=bmi_bins, labels=bmi_labels)
 
+    # Additional underweight thresholds used in sensitivity/subgroup reporting
+    df["bmi_lt20"] = df["bmi"].lt(20)
+    df["bmi_lt185"] = df["bmi"].lt(18.5)
+    bmi_bins_ext = [0, 18.5, 20, 25, 30, 35, 40, np.inf]
+    bmi_labels_ext = ["<18.5", "18.5-19.9", "20-24.9", "25-29.9", "30-34.9", "35-39.9", "≥40"]
+    df["bmi_class_ext"] = pd.cut(df["bmi"], bins=bmi_bins_ext, labels=bmi_labels_ext)
+
     return df
 
 
 __all__ = ["build_dataset", "load_raw", "LOS_25TH_THRESHOLD", "LOS_75TH_THRESHOLD"]
-

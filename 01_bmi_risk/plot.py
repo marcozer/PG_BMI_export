@@ -80,9 +80,13 @@ def plot_dose_response(curve_path: Path) -> None:
     # WHO cutoffs
     for x in [25, 30, 35, 40]:
         ax.axvline(x, color=theme.palette[2], linestyle="--", alpha=0.6)
+    # Underweight reference cutoffs (requested)
+    for x in [18.5, 20]:
+        ax.axvline(x, color=theme.grid, linestyle="--", alpha=0.9)
     ax.set_xlabel("BMI (kg/m²)")
     ax.set_ylabel("Probabilité de Best Performer")
     ax.set_title("Dose-réponse BMI → Best Performer", color=theme.title)
+    ax.set_xlim(15, 45)
     ax.set_ylim(0, 1)
     ax.legend(frameon=False)
     apply_theme(ax, theme)
@@ -116,6 +120,14 @@ def plot_volume_pooled(df: pd.DataFrame) -> None:
     palette = [theme.palette[0], theme.palette[2]]
     order = ["Low+Mid", "High"]
 
+    def smooth_reflect(values: pd.Series, kernel: np.ndarray) -> np.ndarray:
+        v = np.asarray(values, dtype=float)
+        pad = len(kernel) // 2
+        if pad == 0 or v.size == 0:
+            return v
+        vpad = np.pad(v, pad_width=pad, mode="reflect")
+        return np.convolve(vpad, kernel, mode="valid")
+
     # Build Low+Mid vs High
     df = df.dropna(subset=["bmi", "best_performer", "centre_volume_cat", "CENTRE"]).copy()
     df["best_performer"] = df["best_performer"].astype(int)
@@ -143,23 +155,42 @@ def plot_volume_pooled(df: pd.DataFrame) -> None:
         grp = agg[agg["tier2"] == tier].dropna(subset=["bmi_mid"]).sort_values("bmi_mid")
         if grp.empty:
             continue
-        means = grp["mean"].rolling(window=2, center=True, min_periods=1).mean()
-        ci_low, ci_high = [], []
+        # Smoothing for visualization only:
+        # apply a small symmetric kernel with reflection at edges to avoid
+        # boundary artifacts (e.g., tiny-n bins yielding p=1.0).
+        kernel = np.array([0.25, 0.50, 0.25], dtype=float)
+
+        # Raw Wilson intervals (bin-level), then smooth bounds for display.
+        ci_low_raw, ci_high_raw = [], []
         for _, row in grp.iterrows():
             if row["count"] > 0:
-                l, h = proportion_confint(count=row["sum"], nobs=row["count"], method="wilson")
+                l, h = proportion_confint(count=int(row["sum"]), nobs=int(row["count"]), method="wilson")
             else:
                 l, h = np.nan, np.nan
-            ci_low.append(l); ci_high.append(h)
-        ci_low = pd.Series(ci_low).rolling(window=2, center=True, min_periods=1).mean()
-        ci_high = pd.Series(ci_high).rolling(window=2, center=True, min_periods=1).mean()
+            ci_low_raw.append(l)
+            ci_high_raw.append(h)
+        ci_low_raw = pd.Series(ci_low_raw)
+        ci_high_raw = pd.Series(ci_high_raw)
+
+        # Smoothed line uses smoothed (successes)/(denominators)
+        sum_s = smooth_reflect(grp["sum"], kernel)
+        n_s = smooth_reflect(grp["count"], kernel)
+        means = np.divide(sum_s, n_s, out=np.full_like(sum_s, np.nan, dtype=float), where=n_s > 0)
+
+        # Smoothed band is the smoothed Wilson bounds (purely descriptive)
+        ci_low = smooth_reflect(ci_low_raw, kernel)
+        ci_high = smooth_reflect(ci_high_raw, kernel)
+        means = np.clip(means, 0, 1)
+        ci_low = np.clip(ci_low, 0, 1)
+        ci_high = np.clip(ci_high, 0, 1)
+
         ax.plot(grp["bmi_mid"], means, color=color, linewidth=2.5, label=tier)
         ax.fill_between(grp["bmi_mid"], ci_low, ci_high, color=color, alpha=0.12)
 
     ax.set_xlabel("BMI (kg/m²)")
     ax.set_ylabel("Taux de Best Performer")
     ax.set_title("BP vs BMI : High vs Low+Mid", color=theme.title)
-    ax.set_xlim(18, 45)
+    ax.set_xlim(15, 45)
     ax.set_ylim(0, 1)
     fig.subplots_adjust(bottom=0.24)
     ax.legend(frameon=False, title="Volume")
@@ -221,9 +252,30 @@ def plot_volume_pooled(df: pd.DataFrame) -> None:
         for idx, tier in enumerate(order):
             color = palette[idx]
             grp = agg[agg["tier2"] == tier].dropna(subset=["bmi_mid"]).sort_values("bmi_mid")
-            means = grp["mean"].rolling(window=2, center=True, min_periods=1).mean()
-            ci_low = grp.apply(lambda r: proportion_confint(r["sum"], r["count"], method="wilson")[0] if r["count"]>0 else np.nan, axis=1).rolling(window=2, center=True, min_periods=1).mean()
-            ci_high = grp.apply(lambda r: proportion_confint(r["sum"], r["count"], method="wilson")[1] if r["count"]>0 else np.nan, axis=1).rolling(window=2, center=True, min_periods=1).mean()
+            if grp.empty:
+                continue
+            kernel = np.array([0.25, 0.50, 0.25], dtype=float)
+
+            ci_low_raw, ci_high_raw = [], []
+            for _, row in grp.iterrows():
+                if row["count"] > 0:
+                    l, h = proportion_confint(count=int(row["sum"]), nobs=int(row["count"]), method="wilson")
+                else:
+                    l, h = np.nan, np.nan
+                ci_low_raw.append(l)
+                ci_high_raw.append(h)
+            ci_low_raw = pd.Series(ci_low_raw)
+            ci_high_raw = pd.Series(ci_high_raw)
+
+            sum_s = smooth_reflect(grp["sum"], kernel)
+            n_s = smooth_reflect(grp["count"], kernel)
+            means = np.divide(sum_s, n_s, out=np.full_like(sum_s, np.nan, dtype=float), where=n_s > 0)
+            ci_low = smooth_reflect(ci_low_raw, kernel)
+            ci_high = smooth_reflect(ci_high_raw, kernel)
+            means = np.clip(means, 0, 1)
+            ci_low = np.clip(ci_low, 0, 1)
+            ci_high = np.clip(ci_high, 0, 1)
+
             ax2.plot(grp["bmi_mid"], means, color=color, linewidth=2.5, label=tier)
             ax2.fill_between(grp["bmi_mid"], ci_low, ci_high, color=color, alpha=0.12)
         # Add rug again
@@ -245,7 +297,7 @@ def plot_volume_pooled(df: pd.DataFrame) -> None:
         ax2.set_xlabel("BMI (kg/m²)")
         ax2.set_ylabel("Taux de Best Performer")
         ax2.set_title("BP vs BMI : High vs Low+Mid (tests par tranches)", color=theme.title)
-        ax2.set_xlim(18, 45)
+        ax2.set_xlim(15, 45)
         ax2.set_ylim(0, 1)
         fig2.subplots_adjust(bottom=0.24)
         ax2.legend(frameon=False, title="Volume")
