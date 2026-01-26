@@ -246,6 +246,19 @@ def main(volume_tier_mode: str = "tertiles") -> None:
                 sub = df_bp.loc[mask]
                 rows.append({"group": label, "n": int(sub.shape[0]), "bp_rate": float(sub["best_performer"].mean()) if sub.shape[0] else np.nan})
             pd.DataFrame(rows).to_csv(OUTPUT_DIR / "bmi_bp_underweight_groups.csv", index=False)
+            # Underweight group ORs (median BMI in group vs BMI 25 reference)
+            bmi_med_under = float(df_bp.loc[df_bp["bmi"] < 18.5, "bmi"].median())
+            bmi_med_lt20 = float(df_bp.loc[df_bp["bmi"] < 20, "bmi"].median())
+            under_or_rows = []
+            for label, bmi_val in [
+                ("BMI <18.5 (median BMI)", bmi_med_under),
+                ("BMI <20 (median BMI)", bmi_med_lt20),
+            ]:
+                tmp = or_vs_ref(models["spline"], ref=25, targets=[bmi_val], df=df, outcome=outcome)
+                tmp.insert(0, "group", label)
+                tmp.insert(1, "bmi_group_median", bmi_val)
+                under_or_rows.append(tmp)
+            pd.concat(under_or_rows, ignore_index=True).to_csv(OUTPUT_DIR / "bmi_or_underweight_vs25.csv", index=False)
         else:
             or_rows.append(or_vs_ref(models["spline"], ref=25, targets=OR_TARGETS_VS25, df=df, outcome=outcome))
 
