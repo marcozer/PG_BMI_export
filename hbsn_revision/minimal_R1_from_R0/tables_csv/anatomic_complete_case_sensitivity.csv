@@ -1,0 +1,4 @@
+Endpoint,n complete cases,events,BMI OR per +5,BMI 95% CI,BMI p-value,Interaction OR,Interaction 95% CI,Interaction p-value
+Best Performer,1085,324,0.82,0.70-0.97,0.021,1.05,1.01-1.10,0.011
+CR-POPF B/C,1085,203,1.27,1.08-1.49,0.003,1.00,0.95-1.06,0.986
+Major morbidity excluding LOS,1085,323,1.20,1.04-1.37,0.009,0.99,0.95-1.04,0.767

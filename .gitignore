@@ -2,3 +2,12 @@
 __pycache__/
 *.pyc
 
+# patient-level data and generated documents are never committed
+data/
+*.docx
+*.xlsx
+hbsn_revision/methods/
+hbsn_revision/manuscript_text/
+hbsn_revision/response_to_reviewers/
+hbsn_revision/validation_report.md
+hbsn_revision/minimal_R1_from_R0/docx/

@@ -1,0 +1,14 @@
+Analysis,Endpoint,Term,Estimate,95% CI,p-value,Scale
+Endpoint robustness,Best Performer,BMI x annual MILP volume,1.040,1.020-1.070,0.002,OR
+Endpoint robustness,Ideal Outcome,BMI x annual MILP volume,1.010,0.960-1.060,0.816,OR
+Endpoint robustness,CR-POPF B/C,BMI x annual MILP volume,1.020,0.970-1.080,0.479,OR
+Endpoint robustness,Conversion,BMI x annual MILP volume,1.040,0.960-1.130,0.357,OR
+Endpoint robustness,Clavien-Dindo >=III,BMI x annual MILP volume,0.930,0.870-1.010,0.070,OR
+Endpoint robustness,Major morbidity excluding LOS,BMI x annual MILP volume,1.010,0.960-1.060,0.726,OR
+Endpoint robustness,CCI (log1p),BMI x annual MILP volume,1.029,1.003-1.055,0.027,Relative ratio from log(CCI+1)
+Anatomic complete-case,Best Performer,BMI x annual MILP volume,1.050,1.010-1.100,0.011,OR
+Anatomic complete-case,CR-POPF B/C,BMI x annual MILP volume,1.000,0.950-1.060,0.986,OR
+Anatomic complete-case,Major morbidity excluding LOS,BMI x annual MILP volume,0.990,0.950-1.040,0.767,OR
+Approach: All patients,Best Performer,BMI x volume x robotic,1.110,0.710-1.720,0.654,OR
+Approach: Laparoscopic,Best Performer,BMI x volume,1.050,1.020-1.080,0.003,OR
+Approach: Robotic,Best Performer,BMI x volume,1.190,0.720-1.970,0.498,OR

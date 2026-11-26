@@ -1,0 +1,9 @@
+Metric,Value
+IPTW analytic n,2018
+Treated high-volume patients,424
+Matching method,1:1 nearest-neighbour without replacement
+Caliper on logit propensity score,0.272
+Matched high-volume patients,417
+Matched Low/Mid-volume controls,417
+Unmatched high-volume patients,7
+Median absolute logit PS distance,0.003
