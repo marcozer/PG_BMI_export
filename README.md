@@ -1,3 +1,5 @@
+> **HBSN 2026 article.** The figures and tables of *Nassar, Chouillard et al., Hepatobiliary Surg Nutr 2026 (doi:10.21037/hbsn-2026-0394)* are reproduced by the pipeline in [`hbsn_revision/`](hbsn_revision/README.md). The analyses at the repository root (`01_bmi_risk/`, `02_interaction/`, `03_visuals/`) are the earlier exploratory version, with a different centre-volume definition, kept for history.
+
 Export package for BMI and center volume analyses for predicting Best Performers outcomes after Laparoscopic Distal Pancreatectomy. 
 
 The model were built by Alexandra Nassar, Clément Pastier, Sébastien Gaujoux and Marc-Anthony Chouillard for the [AFC](https://www.association-francaise-chirurgie.fr/) (French Association of Visceral Surgery). 

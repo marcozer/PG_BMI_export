@@ -1,0 +1,4 @@
+Model,Subgroup,Endpoint,n,Term,Interaction estimate,95% CI,p-value
+Three-way interaction,All patients,Best Performer,2018,BMI x volume x robotic,1.11,0.71-1.72,0.654
+Stratified,Laparoscopic,Best Performer,1749,BMI x volume,1.05,1.02-1.08,0.003
+Stratified,Robotic,Best Performer,269,BMI x volume,1.19,0.72-1.97,0.498

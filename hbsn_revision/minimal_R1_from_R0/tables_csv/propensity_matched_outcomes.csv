@@ -1,0 +1,7 @@
+Endpoint,Matched pairs,High-volume,Matched Low/Mid-volume,Matched-pair OR,95% CI,McNemar p-value,High-only discordant pairs,Low/Mid-only discordant pairs
+Best Performer,417,185/417 (44.4),106/417 (25.4),2.22,1.65-2.97,<0.001,144,65
+Ideal Outcome,417,273/417 (65.5),242/417 (58.0),1.36,1.03-1.81,0.034,116,85
+Major morbidity excluding LOS,417,109/417 (26.1),130/417 (31.2),0.78,0.58-1.06,0.126,75,96
+CR-POPF B/C,417,56/417 (13.4),87/417 (20.9),0.60,0.41-0.86,0.007,46,77
+Clavien-Dindo >=III,417,50/417 (12.0),79/417 (18.9),0.59,0.40-0.87,0.008,42,71
+Conversion,417,46/417 (11.0),77/417 (18.5),0.54,0.36-0.81,0.003,37,68

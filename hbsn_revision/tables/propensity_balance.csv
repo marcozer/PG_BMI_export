@@ -1,0 +1,12 @@
+Covariate,SMD before adjustment,SMD after IPTW,SMD after PSM
+age,-0.043,-0.025,-0.013
+bmi,-0.162,-0.004,0.066
+sex_male,-0.017,0.088,-0.067
+asa_ge3,-0.411,-0.169,-0.028
+malignant,-0.032,0.011,0.011
+robotic,-0.519,-0.185,-0.048
+splenectomy,-0.416,0.020,-0.011
+soft_pancreas,0.258,-0.163,-0.015
+duct_diameter,0.084,-0.014,-0.037
+texture_missing,-0.346,0.235,-0.022
+duct_missing,-0.863,-0.062,0.041
